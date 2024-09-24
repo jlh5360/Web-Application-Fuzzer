@@ -1,0 +1,11 @@
+.php
+.html
+.htm
+.asp
+.aspx
+.jsp
+.py
+.rb
+.txt
+.json
+.xml

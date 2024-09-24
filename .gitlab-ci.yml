@@ -1,0 +1,73 @@
+#This is the configuration file for GitLab CI/CD.
+#It specifies how the continuous integration pipeline should be constructed.
+#The pipeline runs each time a commit is pushed to the repository.
+
+#Define the Docker image which contains the necessary tools and libraries
+image:
+  name: andymeneely/swen331fuzzer # don't change this
+  entrypoint: [""]  # don't change this
+#Define commands that should run before the actual Scripts (like starting services)
+before_script:
+  #Set permissions for MySQL (this is required for the application to function correctly)
+  # don't change these either
+  - chown -R mysql:mysql /var/lib/mysql /var/run/mysqld
+  - echo '[+] Starting mysql...'
+  - service mysql start
+  - echo '[+] Starting apache'
+  - service apache2 start
+#Define a job called fuzzrunner which will execute the fuzzer application
+fuzzrunner:
+  script:
+    #Initial log message for clarity
+    - echo "Installing necessary packages/libraries"
+
+    #Installing necessary packages/libraries
+    - python3 -m pip install requests
+    - python3 -m pip install mechanicalsoup
+    - python3 -m pip install argparse
+    - python3 -m pip install beautifulsoup4
+
+    #Second log message for clarity
+    - echo "Starting Python Fuzzer Tests"
+    
+    #Display the contents of example word and vector files
+    - echo "[+] Common words:"
+    - cat /words.txt                 #Display the content of common words file
+    - echo "[+] Vectors:"
+    - cat /vectors.txt               #Display the content of vectors file
+    - echo "[+] Bad Characters:"
+    - cat /badchars.txt              #Display the content of bad characters file
+
+    #Example command to run the fuzzer in discovery mode against DVWA
+    - echo "[+] Running discovery on DVWA..."
+    - python3 fuzz.py discover http://localhost/ --custom-auth=dvwa --common-words=common_words.txt --extensions=extensions.txt   #Run discovery against DVWA
+
+    #Example command to run the fuzzer in discovery mode against Fuzzer Tests
+    - echo "[+] Running discovery on Fuzzer Tests..."
+    - python3 fuzz.py discover http://127.0.0.1/fuzzer-tests/ --common-words=common_words.txt --extensions=extensions.txt
+
+    #Example command to run the fuzzer in discovery mode against Fuzzer Tests
+    - echo "[+] Running discovery on DVWA particularly to show parsing URLs work..."
+    - python3 fuzz.py discover http://127.0.0.1/security.php?test=%22 --common-words=common_words.txt --extensions=extensions.txt
+
+    # #Example command to run the fuzzer in discovery mode against RIT
+    # - python3 fuzz.py discover https://www.rit.edu/ --common-words=commonwords.txt   #Run discovery against RIT
+
+    # #Example command to run the fuzzer in discovery mode against StackOverflow
+    # - python3 fuzz.py discover https://www.stackoverflow.com/ --common-words=commonwords.txt
+
+    # #Fuzzer discovery on the fuzzer-tests directory
+    # - echo "[+] Running discovery on fuzzer-tests..."
+    # - python3 fuzz.py discover http://localhost/fuzzer-tests --common-words=mywords.txt   #Run discovery on the fuzzer-tests
+
+    # #Example command to run the fuzzer in test mode against DVWA
+    # - echo "[+] Running tests against DVWA..."
+    # - python3 fuzz.py test http://localhost/dvwa/ --custom-auth=dvwa --common-words=mywords.txt --vectors=vectors.txt --sensitive=sensitive.txt   #Run tests against DVWA
+
+    # #Example command to run the fuzzer in test mode against RIT
+    # - python3 fuzz.py test https://www.rit.edu/ --common-words=mywords.txt --vectors=vectors.txt --sensitive=sensitive.txt   #Run tests against RIT
+
+    # #Running tests on the fuzzer-tests directory
+    # - echo "[+] Running tests on fuzzer-tests..."
+    # - python3 fuzz.py test http://localhost/fuzzer-tests --common-words=mywords.txt --vectors=vectors.txt --sensitive=sensitive.txt   #Run tests on fuzzer-tests
+  stage: test
