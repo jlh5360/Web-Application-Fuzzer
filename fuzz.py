@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 import mechanicalsoup
 import argparse
 import warnings
+import time
 
 
 
@@ -36,9 +37,11 @@ def parse_args():
     #Test options
     parser_test.add_argument("--custom-auth", help = "Signal that the fuzzer should use hard-coded authentication for a specific application (e.g. dvwa).", type = str)
     parser_test.add_argument("--common-words", help = "Newline-delimited file of common words to be used in page guessing. Required.", type = str, required = True)
-    parser_test.add_argument("--extensions", help = "Newline-delimited file of path extensions, e.g. \".php\". Optional. Defaults to \".php\" and the empty string if not specified", type = str, required = None, default = ".php")
+    # parser_test.add_argument("--extensions", help = "Newline-delimited file of path extensions, e.g. \".php\". Optional. Defaults to \".php\" and the empty string if not specified", type = str, required = None, default = ".php")
+    parser_test.add_argument("--extensions", help = "Newline-delimited file of path extensions, e.g. \".php\". Optional. Defaults to \".php\" and the empty string if not specified", type = str, required = None)
     parser_test.add_argument("--vectors", help = "Newline-delimited file of common exploits to vulnerabilities. Required.", type = str, required = True)
-    parser_test.add_argument("--sanitized-chars", help = "Newline-delimited file of characters that should be sanitized from inputs. Defaults to just < and >", type = str, default = ["<", ">"])
+    # parser_test.add_argument("--sanitized-chars", help = "Newline-delimited file of characters that should be sanitized from inputs. Defaults to just < and >", type = str, default = ["<", ">"])
+    parser_test.add_argument("--sanitized-chars", help = "Newline-delimited file of characters that should be sanitized from inputs. Defaults to just < and >", type = str)
     parser_test.add_argument("--sensitive", help = "Newline-delimited file data that should never be leaked. It's assumed that this data is in the application's database (e.g. test data), but is not reported in any response. Required.", required = True)
     parser_test.add_argument("--slow", help = "Number of milliseconds considered when a response is considered \"slow\". Optional. Default is 500 milliseconds", type = int, required = None, default = 500)
     
@@ -94,7 +97,7 @@ def setup_login_dvwa(base_url):
     #8.  Begin your fuzzing operations. (See rest of instructions)
     home_url = urljoin(base_url, 'index.php')   #Create the home index URL by joining the base URL and "index.php"
     browser.open(home_url)
-    print(browser.get_current_page())   #Print/Output the HTML code of the home URL to confirm login
+    # print(browser.get_current_page())   #Print/Output the HTML code of the home URL to confirm login
 
     return browser
 
@@ -156,7 +159,7 @@ def get_cookies(browser):
 #       links on the page, look for any input forms it can find, print those out/print the page out-- but it won't go any deeper
 #       (i.e., it won't crawl anything/open any links yet). Essentially, it just familiarizes itself with any non-dvwa page it
 #       is given via url (e.g., localhost, rit.edu, etc).
-def scrape_page(absolute_base_domain, base_url, url, visited_links, browser):
+def scrape_page(absolute_base_domain, base_url, url, visited_links, browser, unique_data):
     #Prevent crawling the same link repeatedly
     if url in visited_links:
         return
@@ -166,6 +169,7 @@ def scrape_page(absolute_base_domain, base_url, url, visited_links, browser):
 
     #1.  Grab the local links on the page
     links = get_links(url, browser)   #Extract links using get_links() function
+    # unique_links = []
 
     #2.  Look for any input forms it can find
     forms = get_forms(url, browser)   #Extract forms using get_forms() function
@@ -178,22 +182,37 @@ def scrape_page(absolute_base_domain, base_url, url, visited_links, browser):
         if (absolute_base_domain == base_domain2):
             if (absolute_url.startswith(base_url)):
                 if (absolute_url not in visited_links):
+                    # unique_links.append(absolute_url)
                     print("\tFound link: " + absolute_url)
-                    scrape_page(absolute_base_domain, base_url, absolute_url, visited_links, browser)   #Recursively crawl found links
+                    scrape_page(absolute_base_domain, base_url, absolute_url, visited_links, browser, unique_data)   #Recursively crawl found links
 
     # print()   #Prints a new line
 
     print("[+] Crawling forms on " + url + ":")
+    input_fields = []
     for form in forms:
         print("\tFound form: action=" + str(form['action']) + ", method=" + str(form['method']))
         for input_field in form["inputs"]:
             print("\t\tInput name: " + str(input_field['name']) + ", type: " + str(input_field['type']) + ", value: " + str(input_field['value']))
+            input_fields.append(input_field["name"])  # Collecting input fields
 
     #4.  Extract and print cookies from the current session
     print("[+] Crawling cookies on " + url + ":")
     current_cookies = get_cookies(browser)
     for cookie in current_cookies:
         print("\t\tCookie name: " + cookie.name + ", value: " + cookie.value)
+            
+    # Gather URL parameters from the current link
+    url_params = parse_url(url)
+
+    # Convert input fields and URL parameters to tuples
+    input_fields_tuple = tuple(input_fields)
+    url_params_tuple = tuple(url_params)
+
+    # Add the unique data entry (link, inputs, url_params)
+    unique_data.add((url, input_fields_tuple, url_params_tuple))
+    
+    return forms
 
 
 #Load a newline-delimited file and return a list of non-empty lines
@@ -215,7 +234,7 @@ def discover_pages(base_url, common_words_file, extensions_file):
     common_words = load_file(common_words_file)   #Load common words from the specified file
     discovered_links = set()
 
-    if (isinstance(extensions_file, str) and extensions_file != "" and extensions_file != None):
+    if (isinstance(extensions_file, str) and (extensions_file != "") and (extensions_file != None)):
         extensions = load_file(extensions_file)   #Load extensions from the specified file
         # print("Pages Successfully Guessed:")
         # print("********************************************")
@@ -249,6 +268,7 @@ def discover_pages(base_url, common_words_file, extensions_file):
 #Discovers inputs through crawling and guessing
 def fuzz_discover(browser, base_url, common_words_file, extensions_file):
     visited_links = set()   #Set to keep track of visited links
+    unique_data = set()   #To store unique tuples of (link, inputs, url_params)
 
     absolute_base_domain = urlparse(base_url).netloc
 
@@ -257,8 +277,8 @@ def fuzz_discover(browser, base_url, common_words_file, extensions_file):
 
     #Crawl the links found in the initial discovery
     for link in discovered_links:
-        # scrape_page(link, visited_links)
-        scrape_page(absolute_base_domain, base_url, link, visited_links, browser)   #Pass the browser
+        #Pass the browser
+        scrape_page(absolute_base_domain, base_url, link, visited_links, browser, unique_data)
         
     #Additionally, check the base URL itself for inputs
     inputs = parse_url(base_url)
@@ -268,6 +288,120 @@ def fuzz_discover(browser, base_url, common_words_file, extensions_file):
     cookies = get_cookies(browser)
     # print(f"[+] Cookies discovered: {cookies}")
     print("[+] Cookies discovered: " + str(cookies))
+
+    return unique_data   #Return the unique tuples of (link, inputs, url_params)
+
+
+#Test for vulnerabilities based on discovered inputs
+def fuzz_test(browser, base_url, common_words_file, extensions_file, vectors_file, sanitized_chars_file, sensitive_file, slow_threshold):
+    unique_data = fuzz_discover(browser, base_url, common_words_file, extensions_file)
+
+    # Load sanitized characters from file or use default if not provided
+    if sanitized_chars_file:
+        sanitized_chars = load_file(sanitized_chars_file)
+    else:
+        sanitized_chars = ["<", ">"]  # Default characters if no file is provided
+
+    sensitive_data_list = load_file(sensitive_file)
+
+    for link_data in unique_data:
+        #Check for HTML content in general
+        print("[+] Testing link: " + link_data[0])
+
+        start_time = time.time()
+        #Open the link URL
+        response = browser.get(link_data[0])
+        # browser.get_current_page()
+        elapsed_time = ((time.time() - start_time) * 1000)   #Convert to milliseconds
+        
+        print("\t[+] In the HTML content/current page:")
+        # Check for sanitization issues
+        for char in sanitized_chars:
+            if (char in response.text):
+                print("\t\t[!] Lack of sanitization detected for " + link_data[0] + ", remaining character: " + char)
+        
+        # Check for sensitive data leaks
+        for sensitive in sensitive_data_list:
+            if (sensitive in response.text):
+                print("\t\t[!] Sensitive data leaked for " + link_data[0] + ": " + sensitive)
+
+        if (elapsed_time > slow_threshold):
+            print("\t\t[!] Slow response detected for " + link_data[0] + " (took " + str(elapsed_time) + " ms)")
+        
+        # Check the HTTP response code
+        if (str(response) and "200" not in "<Response [200]>"):
+            print("\t\t[!] Non-200 HTTP response code for " + link_data[0] + ": " + str(response.status_code))
+        
+        # If form inputs exist, test each input field
+        if (len(link_data[1]) > 0):
+            print("\t[+] Found form inputs: " + str(link_data[1]))
+            forms = get_forms(link_data[0], browser)   #Get forms form the current browser state
+            if forms:   #Check if any forms exist
+                # Select the first form in the response
+                browser.select_form("form")
+                for input_name in link_data[1]:
+                    for vector in load_file(vectors_file):
+                        vector = vector.strip()
+                        if not vector:
+                            continue
+
+                        #Set the input field in the form                        
+                        try:
+                            #Set the input field in the form
+                            browser[input_name] = vector
+                            #Submit the form
+                            response = browser.submit_selected()
+                            #Process response for vulnerabilities as before
+                            elapsed_time = ((time.time() - start_time) * 1000)
+                            
+                            #Check for sanitization issues
+                            for char in sanitized_chars:
+                                if (char in response.text):
+                                    print("\t\t[!] Lack of sanitization detected for '" + input_name + "' with vector '" + vector + "', remaining character: " + char)
+                            
+                            #Check for sensitive data leaks
+                            for sensitive in sensitive_data_list:
+                                if (sensitive in response.text):
+                                    print("\t\t[!] Sensitive data leaked for '" + input_name + "' with vector '" + vector + "': " + sensitive)
+                            
+                            if (elapsed_time > slow_threshold):
+                                print("\t\t[!] Slow response detected for '" + input_name + "' with vector '" + vector + "' (took " + str(elapsed_time) + " ms)")
+                            
+                            if (str(response) and "200" not in "<Response [200]>"):
+                                print("\t\t[!] Non-200 HTTP response code for '" + input_name + "' with vector '" + vector + "': " + str(response.status_code))
+                        except Exception as e:
+                            # print("\t[ERROR] Failed to submit form with payload '" + vector + "': " + str(e))
+                            continue
+        # If URL parameters exist, test each URL parameter
+        if link_data[2]:
+            print("\t[+] Found URL parameters: " + str(link_data[2]))
+            for param in link_data[2]:
+                for vector in load_file(vectors_file):
+                    vector = vector.strip()
+                    if not vector:
+                        continue
+
+                    # Simulate setting the parameter and making a request (assuming you can modify the URL)
+                    test_url = (link_data[0] + "?" + param + "=" + vector)  # This assumes that you're just appending the parameter for the test
+                    browser.open(test_url)
+
+                    # Check for sanitization issues
+                    for char in sanitized_chars:
+                        if (char in response.text):
+                            print("\t\t[!] Lack of sanitization detected for URL parameter '" + param + "' with vector '" + vector + "', remaining character: " + char)
+                    
+                    # Check for sensitive data leaks
+                    for sensitive in sensitive_data_list:
+                        if (sensitive in response.text):
+                            print("\t\t[!] Sensitive data leaked for URL parameter '" + param + "' with vector '" + vector + "': " + sensitive)
+
+                    # Check response as before
+                    elapsed_time = (time.time() - start_time) * 1000
+                    if (elapsed_time > slow_threshold):
+                        print("\t\t[!] Slow response detected for URL parameter '" + param + "' with vector '" + vector + "' (took " + str(elapsed_time) + " ms)")
+                    
+                    if (str(response) and "200" not in "<Response [200]>"):
+                        print("\t\t[!] Non-200 HTTP response code for URL parameter '" + param + "' with vector '" + vector + "': " + str(response.status_code))
 
 
 #==================================== Parse URLs ====================================
@@ -281,13 +415,17 @@ def parse_url(url):
 
 def main():
     # At the start of your script to suppress specific warnings
-    warnings.filterwarnings("ignore", category=UserWarning, module='bs4.builder')
+    warnings.filterwarnings("ignore", category = UserWarning, module = 'bs4.builder')
 
     #Set args to Command-Line Interface (CLI)
     args = parse_args()
     
     #If command is "discover"
     if (args.command == "discover"):
+        print("================================================================================")
+        print("[+] Discovering for " + args.url + ".")
+        print("================================================================================\n\n")
+        
         #If custom-auth is dvwa
         if (args.custom_auth == "dvwa"):
             #Perform the custom DVWA authentication sequence
@@ -296,10 +434,10 @@ def main():
             print("================================================================================\n\n")
             browser = setup_login_dvwa(args.url)   #Calls/executes this function for the DVWA custom auth with the user's input of URL
 
-            print()
-            print()
-            print()
-            print()
+            # print()
+            # print()
+            # print()
+            # print()
 
             fuzz_discover(browser, args.url, args.common_words, args.extensions)
         else:
@@ -307,14 +445,37 @@ def main():
             print("================================================================================")
             print("[+] Crawling exterior of " + args.url + ".")
             print("================================================================================\n\n")
-            # scrape_page(args.url)
             
             browser = mechanicalsoup.StatefulBrowser()   #Create a MechanicalSoup browser
             fuzz_discover(browser, args.url, args.common_words, args.extensions)   #Start the discover process
     #Else if command is "test"
     elif (args.command == "test"):
-        #WILL UPDATE THIS FOR / IN THE UPCOMING FUZZER 1 & 2 (PARTS 1 & 2)
-        print("WORK-IN PROGRESS  |  NOT YET IMPLEMENTED when only 'discover' is for Fuzzer 0 (Part 0)")
+        print("================================================================================")
+        print("[+] Testing for " + args.url + ".")
+        print("================================================================================\n\n")
+
+        #If custom-auth is dvwa
+        if (args.custom_auth == "dvwa"):
+            #Perform the custom DVWA authentication sequence
+            print("================================================================================")
+            print("[+] Using custom DVWA authentication for " + args.url + ".")
+            print("================================================================================\n\n")
+            browser = setup_login_dvwa(args.url)   #Calls/executes this function for the DVWA custom auth with the user's input of URL
+
+            # print()
+            # print()
+            # print()
+            # print()
+
+            fuzz_test(browser, args.url, args.common_words, args.extensions, args.vectors, args.sanitized_chars, args.sensitive, args.slow)
+        else:
+            #Crawl the exterior of the non-DVWA web application
+            print("================================================================================")
+            print("[+] Crawling exterior of " + args.url + ".")
+            print("================================================================================\n\n")
+            
+            browser = mechanicalsoup.StatefulBrowser()   #Create a MechanicalSoup browser
+            fuzz_test(browser, args.url, args.common_words, args.extensions, args.vectors, args.sanitized_chars, args.sensitive, args.slow)   #Start the test process
 
 
 if __name__ == "__main__":

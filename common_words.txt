@@ -17,5 +17,13 @@ gallery
 uploads
 download
 vulnerabilities
+instructions
+setup
+security
+phpinfo
 settings
 news
+valid
+timeout
+sensitive
+logout

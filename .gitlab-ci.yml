@@ -15,23 +15,23 @@ before_script:
   - service mysql start
   - echo '[+] Starting apache'
   - service apache2 start
+
+  #Initial log message for clarity
+  - echo "Installing necessary packages/libraries"
+
+  #Installing necessary packages/libraries
+  - python3 -m pip install requests
+  - python3 -m pip install mechanicalsoup
+  - python3 -m pip install argparse
+  - python3 -m pip install beautifulsoup4
 #Define a job called fuzzrunner which will execute the fuzzer application
 fuzzrunner:
   script:
-    #Initial log message for clarity
-    - echo "Installing necessary packages/libraries"
-
-    #Installing necessary packages/libraries
-    - python3 -m pip install requests
-    - python3 -m pip install mechanicalsoup
-    - python3 -m pip install argparse
-    - python3 -m pip install beautifulsoup4
-
     #Second log message for clarity
     - echo "Starting Python Fuzzer Tests"
     
     #Display the contents of example word and vector files
-    - echo "[+] Common words:"
+    - echo "[+] Common Words:"
     - cat /words.txt                 #Display the content of common words file
     - echo "[+] Vectors:"
     - cat /vectors.txt               #Display the content of vectors file
@@ -49,6 +49,14 @@ fuzzrunner:
     #Example command to run the fuzzer in discovery mode against Fuzzer Tests
     - echo "[+] Running discovery on DVWA particularly to show parsing URLs work..."
     - python3 fuzz.py discover http://127.0.0.1/security.php?test=%22 --common-words=common_words.txt --extensions=extensions.txt
+
+    #Example command to run the fuzzer in test mode against Fuzzer Tests
+    - echo "[+] Running tests on Fuzzer Tests..."
+    - python3 fuzz.py test http://127.0.0.1/fuzzer-tests/ --common-words=common_words.txt --vectors=vectors.txt --sensitive=sensitive.txt   #Run tests on Fuzzer Tests
+
+    #Example command to run the fuzzer in test mode against DVWA
+    - echo "[+] Running tests on DVWA..."
+    - python3 fuzz.py test http://127.0.0.1/ --custom-auth=dvwa --common-words=common_words.txt --extensions=extensions.txt --vectors=vectors.txt --sensitive=sensitive.txt
 
     # #Example command to run the fuzzer in discovery mode against RIT
     # - python3 fuzz.py discover https://www.rit.edu/ --common-words=commonwords.txt   #Run discovery against RIT
