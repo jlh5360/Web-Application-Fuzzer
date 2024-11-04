@@ -1,3 +1,4 @@
+
 # Web Application Fuzzer
 
 ## Setup and Installation

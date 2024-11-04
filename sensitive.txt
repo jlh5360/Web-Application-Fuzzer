@@ -1,0 +1,16 @@
+123-45-6789
+MySQL
+password
+secret
+sensitive_info
+admin
+creditcard
+"SELECT * FROM users;"
+' OR '1'='1'; --
+user@example.com
+confidential
+stripe_api_key_12345678
+' UNION ALL SELECT username, password FROM users --
+Bearer Token: abcdef1234567890
+access_token
+lorem_ipsum_dolor_sit_amet
